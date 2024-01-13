@@ -73,22 +73,24 @@ public class AudioStreamerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler 
       onBus: 0, bufferSize: 8196, format: inputFormat
     ) {
       (buffer: AVAudioPCMBuffer, when: AVAudioTime) in
-      guard let eventSink = self.eventSink else {
-        return
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, let eventSink = self.eventSink else {
+          return
+        }
+
+        let outputFrameCapacity = AVAudioFrameCount(Double(buffer.frameCapacity) * sampleRateRatio)
+
+        let newBuffer = AVAudioPCMBuffer(
+          pcmFormat: format16K, frameCapacity: outputFrameCapacity)!
+
+        let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
+          outStatus.pointee = .haveData
+          return buffer
+        }
+
+        converter.convert(to: newBuffer, error: nil, withInputFrom: inputBlock)
+        eventSink(newBuffer.data())
       }
-
-      let outputFrameCapacity = AVAudioFrameCount(Double(buffer.frameCapacity) * sampleRateRatio)
-
-      let newBuffer = AVAudioPCMBuffer(
-        pcmFormat: format16K, frameCapacity: outputFrameCapacity)!
-
-      let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
-        outStatus.pointee = .haveData
-        return buffer
-      }
-
-      converter.convert(to: newBuffer, error: nil, withInputFrom: inputBlock)
-      eventSink(newBuffer.data())
     }
 
     audioEngine.prepare()
